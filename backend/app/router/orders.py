@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -6,9 +6,33 @@ from app.db.session import get_db
 from app.models.customer import Customer
 from app.models.order import Order, OrderItem
 from app.models.product import Product
-from app.schemas.order import OrderCreate, OrderRead
+from app.schemas.order import OrderCreate, OrderRead, OrderStatusUpdate
+from app.schemas.pagination import PaginatedResponse
+from sqlalchemy import func
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+@router.put("/{order_id}/status", response_model=OrderRead)
+def update_order_status(order_id: int, payload: OrderStatusUpdate, db: Session = Depends(get_db)):
+    order = db.scalars(
+        select(Order).options(selectinload(Order.items)).where(Order.id == order_id)
+    ).first()
+    
+    if order is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Order {order_id} not found.",
+        )
+        
+    try:
+        order.status = payload.status
+        db.commit()
+        db.refresh(order)
+    except Exception:
+        db.rollback()
+        raise
+        
+    return order
 
 
 @router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
@@ -67,17 +91,40 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
 
     order.total_amount = total
 
-    db.add(order)
-    db.commit()
-    db.refresh(order)
+    try:
+        db.add(order)
+        db.commit()
+        db.refresh(order)
+    except Exception:
+        db.rollback()
+        raise
+        
     return order
 
-
-@router.get("", response_model=list[OrderRead])
-def list_orders(db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
-    return db.scalars(
-        select(Order).options(selectinload(Order.items)).offset(skip).limit(limit)
-    ).all()
+@router.get("", response_model=PaginatedResponse[OrderRead])
+def list_orders(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    customer_id: int | None = None,
+    status: str | None = None,
+):
+    query = select(Order)
+    if customer_id is not None:
+        query = query.where(Order.customer_id == customer_id)
+    if status is not None:
+        query = query.where(Order.status == status)
+        
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    items_query = query.options(selectinload(Order.items)).order_by(Order.id.desc()).offset(skip).limit(limit)
+    items = db.scalars(items_query).all()
+    
+    return {
+        "items": items,
+        "total": total or 0,
+        "skip": skip,
+        "limit": limit
+    }
 
 
 @router.get("/{order_id}", response_model=OrderRead)
@@ -104,10 +151,14 @@ def delete_order(order_id: int, db: Session = Depends(get_db)):
             detail=f"Order {order_id} not found.",
         )
 
-    for item in order.items:
-        product = db.get(Product, item.product_id)
-        if product is not None:
-            product.quantity += item.quantity
+    try:
+        for item in order.items:
+            product = db.get(Product, item.product_id)
+            if product is not None:
+                product.quantity += item.quantity
 
-    db.delete(order)
-    db.commit()
+        db.delete(order)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
