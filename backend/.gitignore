@@ -1,33 +1,37 @@
-# Environment / secrets
-.env
-.env.*
-!.env.example
-
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
 *.so
 
-# Virtual environment
+# Environment
+.env
 .venv/
 venv/
+env/
+ENV/
 
-# uv
-.uv/
+# Database
+*.db
+*.sqlite3
 
-# Testing / coverage
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
 
-# IDE / editor
+# IDEs
 .vscode/
 .idea/
 *.swp
 
-# OS
-.DS_Store
-Thumbs.db
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic
+alembic/versions/__pycache__/
