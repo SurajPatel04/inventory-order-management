@@ -10,6 +10,7 @@ export default function Dashboard() {
     products: 0, customers: 0, orders: 0, lowStock: 0,
     lowStockProducts: [], recentOrders: []
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     api.get('/dashboard/stats').then(res => {
@@ -21,7 +22,8 @@ export default function Dashboard() {
         lowStockProducts: res.data.low_stock_products,
         recentOrders: res.data.recent_orders
       });
-    }).catch(() => toast.error("Failed to load dashboard data"));
+    }).catch(() => toast.error("Failed to load dashboard data"))
+      .finally(() => setIsLoading(false));
   }, []);
 
   const cards = [
@@ -36,6 +38,15 @@ export default function Dashboard() {
     { name: 'Customers', value: stats.customers, color: '#10b981' },
     { name: 'Orders', value: stats.orders, color: '#8b5cf6' }
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh]">
+        <div className="w-12 h-12 border-4 border-[#432DD7] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-medium animate-pulse">Loading your dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

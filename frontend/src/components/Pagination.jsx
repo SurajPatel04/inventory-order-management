@@ -46,7 +46,7 @@ export default function Pagination({ total, skip, limit, onPageChange }) {
                 key={idx}
                 onClick={() => onPageChange(idx * limit)}
                 className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${currentPage === idx + 1
-                    ? 'z-10 bg-emerald-600 text-white focus-visible:outline-emerald-600'
+                    ? 'z-10 bg-[#432DD7] text-white focus-visible:outline-[#432DD7]'
                     : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
                   }`}
               >

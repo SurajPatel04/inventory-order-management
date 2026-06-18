@@ -37,7 +37,7 @@ export default function Select({ options, value, onChange, placeholder, icon: Ic
   }
 
   return (
-    <div className={`relative w-full ${className}`} ref={ref}>
+    <div className={`relative ${className ? className : 'w-full'}`} ref={ref}>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
