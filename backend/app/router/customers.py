@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.customer import Customer
 from app.schemas.customer import CustomerCreate, CustomerRead
+from app.schemas.pagination import PaginatedResponse
+from sqlalchemy import func
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -25,10 +27,29 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
     db.refresh(customer)
     return customer
 
-
-@router.get("", response_model=list[CustomerRead])
-def list_customers(db: Session = Depends(get_db), skip: int = 0, limit: int = 100):
-    return db.scalars(select(Customer).offset(skip).limit(limit)).all()
+@router.get("", response_model=PaginatedResponse[CustomerRead])
+def list_customers(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    email: str | None = None,
+    name: str | None = None,
+):
+    query = select(Customer)
+    if email is not None:
+        query = query.where(Customer.email.contains(email))
+    if name is not None:
+        query = query.where(Customer.full_name.contains(name))
+        
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    items = db.scalars(query.order_by(Customer.id.desc()).offset(skip).limit(limit)).all()
+    
+    return {
+        "items": items,
+        "total": total or 0,
+        "skip": skip,
+        "limit": limit
+    }
 
 
 @router.get("/{customer_id}", response_model=CustomerRead)
