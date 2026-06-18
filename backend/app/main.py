@@ -3,7 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.router import products, customers, orders, dashboard
 
-app = FastAPI(title="Inventory & Order Management API")
+app = FastAPI(
+    title="Inventory & Order Management API",
+    root_path="/api"
+)
 
 app.add_middleware(
     CORSMiddleware,
