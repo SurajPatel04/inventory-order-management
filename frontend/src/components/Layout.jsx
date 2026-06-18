@@ -14,7 +14,7 @@ export default function Layout() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="h-screen bg-gray-50 flex flex-col md:flex-row overflow-hidden">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between bg-white border-b border-gray-200 px-4 py-3 z-20 shadow-sm">
         <h1 className="text-xl font-bold text-gray-800 tracking-tight">Inventory<span className="text-blue-600">Pro</span></h1>

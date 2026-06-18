@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import api from '../api/api';
-import { Plus, Trash2, Edit2, PackageSearch } from 'lucide-react';
+import { Plus, Trash2, Edit2, PackageSearch, Package, Filter } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import Pagination from '../components/Pagination';
 import { motion } from 'motion/react';
 
 export default function Products() {
@@ -13,10 +14,34 @@ export default function Products() {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [deleteProduct, setDeleteProduct] = useState(null);
+  const [filters, setFilters] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const page = parseInt(params.get('page')) || 1;
+    return { search: '', low_stock: false, min_quantity: '', skip: Math.max(0, (page - 1) * 10), limit: 10 };
+  });
+  const [total, setTotal] = useState(0);
 
-  useEffect(() => { loadProducts() }, []);
+  useEffect(() => {
+    const currentPage = Math.floor(filters.skip / filters.limit) + 1;
+    const url = new URL(window.location);
+    url.searchParams.set('page', currentPage);
+    window.history.replaceState(null, '', url);
+  }, [filters.skip, filters.limit]);
 
-  const loadProducts = () => api.get('/products').then(res => setProducts(res.data)).catch(() => toast.error("Failed to load products"));
+  useEffect(() => {
+    const timer = setTimeout(() => loadProducts(), 300);
+    return () => clearTimeout(timer);
+  }, [filters]);
+
+  const loadProducts = () => {
+    const params = { skip: filters.skip, limit: filters.limit };
+    if (filters.low_stock) params.low_stock = true;
+    if (filters.min_quantity) params.min_quantity = parseInt(filters.min_quantity);
+    api.get('/products', { params }).then(res => {
+      setProducts(res.data.items);
+      setTotal(res.data.total);
+    }).catch(() => toast.error("Failed to load products"));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,7 +88,23 @@ export default function Products() {
 
   return (
     <div className="space-y-6 sm:space-y-8 w-full">
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100/60">
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <label className="flex items-center space-x-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 cursor-pointer">
+            <input type="checkbox" checked={filters.low_stock} onChange={e => setFilters({...filters, low_stock: e.target.checked, skip: 0})} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            <span>Low Stock</span>
+          </label>
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="number"
+              placeholder="Min Qty"
+              value={filters.min_quantity}
+              onChange={e => setFilters({...filters, min_quantity: e.target.value, skip: 0})}
+              className="pl-9 pr-4 py-2 w-full sm:w-32 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all"
+            />
+          </div>
+        </div>
         <motion.button 
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -159,14 +200,15 @@ export default function Products() {
               {products.length === 0 && (
                 <tr>
                   <td colSpan="5" className="px-6 py-12 text-center text-gray-400">
-                    <PackageSearch className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p>No products found. Start by adding one above.</p>
+                    <Package className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p>No products found matching your criteria.</p>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        <Pagination total={total} skip={filters.skip} limit={filters.limit} onPageChange={(newSkip) => setFilters({...filters, skip: newSkip})} />
       </motion.div>
     </div>
   );

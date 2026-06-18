@@ -29,15 +29,15 @@ export default function Modal({ isOpen, onClose, title, children }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden z-10"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-visible z-10"
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 rounded-t-2xl">
               <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="px-6 py-5 bg-gray-50/30">
+            <div className="px-6 py-5 bg-gray-50/30 rounded-b-2xl">
               {children}
             </div>
           </motion.div>

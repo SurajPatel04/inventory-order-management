@@ -1,0 +1,24 @@
+# Global OS Files
+.DS_Store
+Thumbs.db
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific ignores
+backend/venv/
+backend/.venv/
+backend/env/
+backend/__pycache__/
+backend/*.db
+backend/*.sqlite3
+backend/.env
+
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.env
+frontend/.env.*

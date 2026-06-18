@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import api from '../api/api';
-import { Plus, Trash2, Users } from 'lucide-react';
+import { Plus, Trash2, Users, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import Pagination from '../components/Pagination';
 import { motion } from 'motion/react';
 
 export default function Customers() {
@@ -12,10 +13,34 @@ export default function Customers() {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [deleteCustomer, setDeleteCustomer] = useState(null);
+  const [filters, setFilters] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const page = parseInt(params.get('page')) || 1;
+    return { name: '', email: '', skip: Math.max(0, (page - 1) * 10), limit: 10 };
+  });
+  const [total, setTotal] = useState(0);
 
-  useEffect(() => { loadCustomers() }, []);
+  useEffect(() => {
+    const currentPage = Math.floor(filters.skip / filters.limit) + 1;
+    const url = new URL(window.location);
+    url.searchParams.set('page', currentPage);
+    window.history.replaceState(null, '', url);
+  }, [filters.skip, filters.limit]);
 
-  const loadCustomers = () => api.get('/customers').then(res => setCustomers(res.data)).catch(() => toast.error("Failed to load customers"));
+  useEffect(() => {
+    const timer = setTimeout(() => loadCustomers(), 300);
+    return () => clearTimeout(timer);
+  }, [filters]);
+
+  const loadCustomers = () => {
+    const params = { skip: filters.skip, limit: filters.limit };
+    if (filters.name) params.name = filters.name;
+    if (filters.email) params.email = filters.email;
+    api.get('/customers', { params }).then(res => {
+      setCustomers(res.data.items);
+      setTotal(res.data.total);
+    }).catch(() => toast.error("Failed to load customers"));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,7 +74,29 @@ export default function Customers() {
 
   return (
     <div className="space-y-6 sm:space-y-8 w-full">
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100/60">
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search Name..."
+              value={filters.name}
+              onChange={e => setFilters({...filters, name: e.target.value, skip: 0})}
+              className="pl-9 pr-4 py-2 w-full rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all"
+            />
+          </div>
+          <div className="relative w-full sm:w-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search Email..."
+              value={filters.email}
+              onChange={e => setFilters({...filters, email: e.target.value, skip: 0})}
+              className="pl-9 pr-4 py-2 w-full rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all"
+            />
+          </div>
+        </div>
         <motion.button 
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -138,13 +185,14 @@ export default function Customers() {
                 <tr>
                   <td colSpan="4" className="px-6 py-12 text-center text-gray-400">
                     <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p>No customers found.</p>
+                    <p>No customers found matching your criteria.</p>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        <Pagination total={total} skip={filters.skip} limit={filters.limit} onPageChange={(newSkip) => setFilters({...filters, skip: newSkip})} />
       </motion.div>
     </div>
   );

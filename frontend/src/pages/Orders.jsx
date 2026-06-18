@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/api';
-import { Plus, Trash2, ShoppingBag, Eye, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, ShoppingBag, ChevronDown, Filter } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Modal from '../components/Modal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import Select from '../components/Select';
+import Pagination from '../components/Pagination';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Orders() {
@@ -14,20 +16,42 @@ export default function Orders() {
   const [expandedId, setExpandedId] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [deleteOrder, setDeleteOrder] = useState(null);
+  const [filters, setFilters] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const page = parseInt(params.get('page')) || 1;
+    return { customer_id: '', status: '', skip: Math.max(0, (page - 1) * 6), limit: 6 };
+  });
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    const currentPage = Math.floor(filters.skip / filters.limit) + 1;
+    const url = new URL(window.location);
+    url.searchParams.set('page', currentPage);
+    window.history.replaceState(null, '', url);
+  }, [filters.skip, filters.limit]);
   
   const [form, setForm] = useState({ customer_id: '', product_id: '', quantity: 1 });
 
-  useEffect(() => { loadData() }, []);
+  useEffect(() => { loadData() }, [filters]);
 
   const loadData = () => {
-    api.get('/orders').then(res => setOrders(res.data)).catch(() => toast.error("Failed to load orders"));
-    api.get('/products').then(res => setProducts(res.data)).catch(console.error);
-    api.get('/customers').then(res => setCustomers(res.data)).catch(console.error);
+    const params = { skip: filters.skip, limit: filters.limit };
+    if (filters.customer_id) params.customer_id = filters.customer_id;
+    if (filters.status) params.status = filters.status;
+    api.get('/orders', { params }).then(res => {
+      setOrders(res.data.items);
+      setTotal(res.data.total);
+    }).catch(() => toast.error("Failed to load orders"));
+    api.get('/products').then(res => setProducts(res.data.items)).catch(console.error);
+    api.get('/customers').then(res => setCustomers(res.data.items)).catch(console.error);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.customer_id || !form.product_id) return;
+    if (!form.customer_id || !form.product_id) {
+      toast.error("Please select both a customer and a product.");
+      return;
+    }
     
     try {
       const payload = {
@@ -56,6 +80,16 @@ export default function Orders() {
     }
   };
 
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await api.put(`/orders/${orderId}/status`, { status: newStatus });
+      toast.success("Status updated!");
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update status');
+    }
+  };
+
   const resetForm = () => {
     setForm({ customer_id: '', product_id: '', quantity: 1 });
     setIsFormOpen(false);
@@ -63,7 +97,31 @@ export default function Orders() {
 
   return (
     <div className="space-y-6 sm:space-y-8 w-full">
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100/60">
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <Select 
+            value={filters.customer_id} 
+            onChange={val => setFilters({...filters, customer_id: val, skip: 0})}
+            placeholder="All Customers"
+            icon={Filter}
+            options={customers.map(c => ({ value: c.id.toString(), label: c.full_name }))}
+            className="sm:w-56"
+          />
+          <Select 
+            value={filters.status} 
+            onChange={val => setFilters({...filters, status: val, skip: 0})}
+            placeholder="All Statuses"
+            icon={Filter}
+            options={[
+              { value: 'confirmed', label: 'Confirmed' },
+              { value: 'pending', label: 'Pending' },
+              { value: 'shipped', label: 'Shipped' },
+              { value: 'delivered', label: 'Delivered' },
+              { value: 'cancelled', label: 'Cancelled' }
+            ]}
+            className="sm:w-56"
+          />
+        </div>
         <motion.button 
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -78,17 +136,21 @@ export default function Orders() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Customer</label>
-            <select required value={form.customer_id} onChange={e => setForm({...form, customer_id: e.target.value})} className="block w-full rounded-xl border-gray-200 bg-white shadow-sm p-2.5 border focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none appearance-none">
-              <option value="">Select Customer</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-            </select>
+            <Select 
+              value={form.customer_id}
+              onChange={val => setForm({...form, customer_id: val})}
+              placeholder="Select Customer"
+              options={customers.map(c => ({ value: c.id.toString(), label: c.full_name }))}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Product</label>
-            <select required value={form.product_id} onChange={e => setForm({...form, product_id: e.target.value})} className="block w-full rounded-xl border-gray-200 bg-white shadow-sm p-2.5 border focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none appearance-none">
-              <option value="">Select Product</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name} (${p.price} - {p.quantity} left)</option>)}
-            </select>
+            <Select 
+              value={form.product_id}
+              onChange={val => setForm({...form, product_id: val})}
+              placeholder="Select Product"
+              options={products.map(p => ({ value: p.id.toString(), label: `${p.name} ($${p.price} - ${p.quantity} left)` }))}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Quantity</label>
@@ -148,14 +210,25 @@ export default function Orders() {
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-700">{customer ? customer.full_name : `ID: ${order.customer_id}`}</td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm">
-                      <span className="px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-100 text-emerald-800">
-                        {order.status || 'Confirmed'}
-                      </span>
+                      <Select 
+                        variant="status"
+                        value={order.status || 'confirmed'}
+                        onChange={(newVal) => { if(newVal) updateOrderStatus(order.id, newVal); }}
+                        placeholder="Status"
+                        options={[
+                          { value: 'pending', label: 'Pending' },
+                          { value: 'confirmed', label: 'Confirmed' },
+                          { value: 'shipped', label: 'Shipped' },
+                          { value: 'delivered', label: 'Delivered' },
+                          { value: 'cancelled', label: 'Cancelled' }
+                        ]}
+                        className="w-28"
+                      />
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">${order.total_amount.toFixed(2)}</td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end gap-1 sm:gap-2">
-                      <button onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : order.id); }} className="text-gray-400 hover:text-blue-600 p-2 rounded-lg hover:bg-blue-50 transition-all">
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <button onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : order.id); }} className="text-gray-400 hover:text-emerald-600 p-2 rounded-lg hover:bg-emerald-50 transition-all">
+                        <ChevronDown className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-emerald-600' : ''}`} />
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); setDeleteOrder(order); }} className="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-all">
                         <Trash2 className="w-4 h-4" />
@@ -172,19 +245,46 @@ export default function Orders() {
                             exit={{ opacity: 0, height: 0 }}
                             className="overflow-hidden"
                           >
-                            <div className="px-4 sm:px-6 py-4 text-sm overflow-x-auto">
-                              <p className="font-semibold text-gray-700 mb-2">Order Items:</p>
-                              <ul className="space-y-1 min-w-[300px]">
-                                {order.items?.map(item => {
-                                  const p = products.find(prod => prod.id === item.product_id);
-                                  return (
-                                    <li key={item.id} className="text-gray-600 flex justify-between bg-white p-2 rounded border border-gray-100">
-                                      <span>{p ? p.name : `Product #${item.product_id}`} (Qty: {item.quantity})</span>
-                                      <span className="font-medium ml-4">${item.subtotal.toFixed(2)}</span>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
+                            <div className="px-6 py-5">
+                              <div className="flex justify-between items-center mb-3">
+                                <h4 className="text-sm font-semibold text-gray-900 flex items-center">
+                                  <ShoppingBag className="w-4 h-4 mr-2 text-emerald-600" /> Order Details
+                                </h4>
+                                <span className="text-xs text-gray-500 font-medium bg-white px-2.5 py-1 rounded-md border border-gray-100 shadow-sm">
+                                  {new Date(order.created_at).toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                                <table className="min-w-full divide-y divide-gray-100 text-sm">
+                                  <thead className="bg-gray-50/50">
+                                    <tr>
+                                      <th className="px-4 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wider text-xs">Product</th>
+                                      <th className="px-4 py-2.5 text-center font-semibold text-gray-500 uppercase tracking-wider text-xs">Qty</th>
+                                      <th className="px-4 py-2.5 text-right font-semibold text-gray-500 uppercase tracking-wider text-xs">Unit Price</th>
+                                      <th className="px-4 py-2.5 text-right font-semibold text-gray-500 uppercase tracking-wider text-xs">Subtotal</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-50">
+                                    {order.items?.map(item => {
+                                      const p = products.find(prod => prod.id === item.product_id);
+                                      return (
+                                        <tr key={item.product_id} className="hover:bg-gray-50/30 transition-colors">
+                                          <td className="px-4 py-3 text-gray-900 font-medium">{p ? p.name : `Product #${item.product_id}`}</td>
+                                          <td className="px-4 py-3 text-center text-gray-600 font-medium">x{item.quantity}</td>
+                                          <td className="px-4 py-3 text-right text-gray-500">${item.unit_price.toFixed(2)}</td>
+                                          <td className="px-4 py-3 text-right font-semibold text-gray-900">${item.subtotal.toFixed(2)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                  <tfoot className="bg-gray-50/80 border-t border-gray-100">
+                                    <tr>
+                                      <td colSpan="3" className="px-4 py-3 text-right font-bold text-gray-700 uppercase tracking-wider text-xs">Total Amount</td>
+                                      <td className="px-4 py-3 text-right font-bold text-emerald-600 text-base">${order.total_amount.toFixed(2)}</td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
                             </div>
                           </motion.div>
                         </td>
@@ -204,6 +304,7 @@ export default function Orders() {
             </tbody>
           </table>
         </div>
+        <Pagination total={total} skip={filters.skip} limit={filters.limit} onPageChange={(newSkip) => setFilters({...filters, skip: newSkip})} />
       </motion.div>
     </div>
   );
